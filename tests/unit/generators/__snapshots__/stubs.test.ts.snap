@@ -1,0 +1,31 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`authStub > snapshot — @/ alias 1`] = `
+"  // TODO: bring your own auth
+  // Add session validation here before processing messages. Example with NextAuth:
+  //   import { auth } from '@/auth'
+  //   const session = await auth()
+  //   if (!session) return new Response('Unauthorized', { status: 401 })"
+`;
+
+exports[`authStub > snapshot — ~/ alias 1`] = `
+"  // TODO: bring your own auth
+  // Add session validation here before processing messages. Example with NextAuth:
+  //   import { auth } from '~/auth'
+  //   const session = await auth()
+  //   if (!session) return new Response('Unauthorized', { status: 401 })"
+`;
+
+exports[`storageStub > snapshot — @/ alias 1`] = `
+"  // TODO: bring your own storage
+  // Add conversation persistence here. Example:
+  //   import { storage } from '@/lib/storage'
+  //   await storage.saveMessages(conversationId, messages)"
+`;
+
+exports[`storageStub > snapshot — ~/ alias 1`] = `
+"  // TODO: bring your own storage
+  // Add conversation persistence here. Example:
+  //   import { storage } from '~/lib/storage'
+  //   await storage.saveMessages(conversationId, messages)"
+`;

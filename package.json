@@ -1,0 +1,58 @@
+{
+  "name": "ai-wingman",
+  "version": "1.0.0",
+  "description": "The right way to wire AI into your Next.js app",
+  "type": "module",
+  "author": "Yonatan Katz",
+  "license": "MIT",
+  "homepage": "https://ai-wingman-psi.vercel.app/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yontn-oss/ai-wingman.git"
+  },
+  "keywords": [
+    "ai",
+    "nextjs",
+    "react",
+    "typescript",
+    "ai-wingman",
+    "wingman"
+  ],
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "bin": {
+    "ai-wingman": "./dist/wingman.js"
+  },
+  "files": [
+    "./dist",
+    "./README.md",
+    "./skills/SKILL.md"
+  ],
+  "scripts": {
+    "generate:registry": "tsx scripts/generate-pattern-registry.ts",
+    "prebuild": "npm run generate:registry",
+    "build": "tsup",
+    "watch": "tsup --watch",
+    "dev": "tsx bin/wingman.ts",
+    "test": "vitest run",
+    "test:e2e": "vitest run tests/e2e --reporter=verbose",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.1.0",
+    "commander": "^14.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.0"
+  }
+}

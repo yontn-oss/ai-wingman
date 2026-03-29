@@ -1,0 +1,8 @@
+<svg width="128" height="64" viewBox="0 0 64 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Left wing -->
+  <path d="M32 18L4 10L6 8L32 22Z" fill="#e5e5e5"/>
+  <!-- Right wing -->
+  <path d="M32 18L60 10L58 8L32 22Z" fill="#e5e5e5"/>
+  <!-- Center spine -->
+  <path d="M30 18L32 14L34 18L32 22Z" fill="#e5e5e5"/>
+</svg>
