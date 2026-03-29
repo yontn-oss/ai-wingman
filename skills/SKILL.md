@@ -58,7 +58,7 @@ Always include `--yes` to skip interactive prompts. Always include `--provider`.
 | `--yes` | all | Accept all defaults, skip prompts |
 | `--overwrite` | all | Overwrite existing files |
 | `--auth` | most | Add NextAuth v5 guard |
-| `--storage <id>` | `chat`, `agent` | `memory` \| `postgres` |
+| `--storage <id>` | `chat`, `agent` | `memory` |
 | `--no-page` | `chat`, `agent`, `audio`, `multimodal`, `image-gen`, `interrupt` | Skip the UI page |
 | `--schema-name <name>` | `structured-output`, `stream-object`, `document-processing` | Name for schema, hook, and type |
 | `--no-hook` | `structured-output`, `stream-object`, `document-processing` | Skip the client hook |
