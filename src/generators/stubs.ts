@@ -1,3 +1,14 @@
+import { inject } from '../utils/template.js'
+
+export function injectAuth(t: string, hasAuth: boolean, pathAlias: string): string {
+  t = inject(t, 'AUTH_IMPORT', hasAuth ? `import { auth } from '${pathAlias}auth'` : '')
+  t = inject(t, 'AUTH_CHECK', hasAuth
+    ? `  const session = await auth()\n  if (!session) return new Response('Unauthorized', { status: 401 })`
+    : authStub(pathAlias)
+  )
+  return t
+}
+
 export function storageStub(pathAlias: string): string {
   return [
     '  // TODO: bring your own storage',

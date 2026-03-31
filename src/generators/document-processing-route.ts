@@ -1,7 +1,7 @@
 import type { DocumentProcessingConfig } from '../types.js'
-import { read, render, inject } from '../utils/template.js'
+import { read, render } from '../utils/template.js'
 import { toImportPath } from '../utils/to-import-path.js'
-import { authStub } from './stubs.js'
+import { injectAuth } from './stubs.js'
 import { MAX_DURATION_HEAVY } from '../defaults.js'
 
 export function generateDocumentProcessingRoute(config: DocumentProcessingConfig): string {
@@ -15,10 +15,6 @@ export function generateDocumentProcessingRoute(config: DocumentProcessingConfig
     __SCHEMA_VAR_NAME__: schemaVarName,
     __SCHEMA_IMPORT_PATH__: toImportPath(config.paths.schema, config.pathAlias),
   })
-  t = inject(t, 'AUTH_IMPORT', config.auth ? `import { auth } from '${config.pathAlias}auth'` : '')
-  t = inject(t, 'AUTH_CHECK', config.auth
-    ? `  const session = await auth()\n  if (!session) return new Response('Unauthorized', { status: 401 })`
-    : authStub(config.pathAlias)
-  )
+  t = injectAuth(t, config.auth, config.pathAlias)
   return t
 }

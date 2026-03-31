@@ -1,7 +1,7 @@
 import type { WingmanConfig } from '../types.js'
 import { read, render, inject } from '../utils/template.js'
 import { toImportPath } from '../utils/to-import-path.js'
-import { authStub, storageStub } from './stubs.js'
+import { authStub, storageStub, injectAuth } from './stubs.js'
 import { MAX_DURATION_STANDARD } from '../defaults.js'
 
 export function generateApiRoute(config: WingmanConfig): string {
@@ -40,11 +40,7 @@ export function generateApiRoute(config: WingmanConfig): string {
     vars.__INTERRUPT_TOOLS_IMPORT_PATH__ = interruptToolsImportPath
   }
   t = render(t, vars)
-  t = inject(t, 'AUTH_IMPORT', hasAuth ? `import { auth } from '${config.pathAlias}auth'` : '')
-  t = inject(t, 'AUTH_CHECK', hasAuth
-    ? `  const session = await auth()\n  if (!session) return new Response('Unauthorized', { status: 401 })`
-    : authStub(config.pathAlias)
-  )
+  t = injectAuth(t, hasAuth, config.pathAlias)
   if (!hasStorage) {
     t = inject(t, 'STORAGE_STUB', storageStub(config.pathAlias))
   }
@@ -88,7 +84,6 @@ export function generateConversationByIdRoute(config: WingmanConfig): string {
     __STORAGE_IMPORT_PATH__: storageImportPath,
   })
   t = inject(t, 'AUTH_IMPORT', hasAuth ? `import { auth } from '${config.pathAlias}auth'` : '')
-  // Same pattern as conversations-route
   t = inject(t, 'AUTH_CHECK', hasAuth
     ? `  const session = await auth()\n  if (!session) return new Response('Unauthorized', { status: 401 })\n`
     : ''

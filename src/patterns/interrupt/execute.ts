@@ -1,12 +1,11 @@
 import * as clack from '@clack/prompts'
-import path from 'node:path'
 import { generateInterruptRoute } from '../../generators/interrupt-route.js'
 import { generateInterruptTools } from '../../generators/interrupt-tools.js'
 import { generateApprovalWidget } from '../../generators/interrupt-approval-widget.js'
 import { generateInterruptPage } from '../../generators/interrupt-page.js'
 import { ensureAtAlias } from '../../steps/ensure-at-alias.js'
 import { detectPathAlias } from '../../utils/detect-path-alias.js'
-import { writeFile } from '../../utils/write-file.js'
+import { createWriter } from '../../utils/write-file.js'
 import type { InterruptPatternConfig, SharedConfig } from '../../types.js'
 
 export async function executeInterruptPattern(
@@ -17,10 +16,7 @@ export async function executeInterruptPattern(
   const { prefix: pathAlias } = detectPathAlias(config.targetDir)
   const freshConfig: InterruptPatternConfig = { ...config, pathAlias }
 
-  const write = (relPath: string) => (content: string) => {
-    writeFile(path.join(config.targetDir, relPath), content)
-    clack.log.success(`Created ${relPath}`)
-  }
+  const write = createWriter(config.targetDir)
 
   write(freshConfig.paths.apiRoute)(generateInterruptRoute(freshConfig))
   write(freshConfig.paths.tools)(generateInterruptTools(freshConfig))

@@ -1,6 +1,6 @@
 {
   "name": "ai-wingman",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "The right way to wire AI into your Next.js app",
   "type": "module",
   "author": "Yonatan Katz",
@@ -40,7 +40,6 @@
     "watch": "tsup --watch",
     "dev": "tsx bin/wingman.ts",
     "test": "vitest run",
-    "test:e2e": "vitest run tests/e2e --reporter=verbose",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

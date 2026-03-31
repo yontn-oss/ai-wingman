@@ -1,11 +1,9 @@
-import * as clack from '@clack/prompts'
-import path from 'node:path'
 import { generateStreamObjectRoute } from '../../generators/stream-object-route.js'
 import { generateStreamObjectHook } from '../../generators/stream-object-hook.js'
 import { generateStructuredOutputSchema } from '../../generators/structured-output-schema.js'
 import { ensureAtAlias } from '../../steps/ensure-at-alias.js'
 import { detectPathAlias } from '../../utils/detect-path-alias.js'
-import { writeFile } from '../../utils/write-file.js'
+import { createWriter } from '../../utils/write-file.js'
 import type { SharedConfig, StreamObjectConfig } from '../../types.js'
 
 export async function executeStreamObjectPattern(
@@ -16,10 +14,7 @@ export async function executeStreamObjectPattern(
   const { prefix: pathAlias } = detectPathAlias(config.targetDir)
   const freshConfig: StreamObjectConfig = { ...config, pathAlias }
 
-  const write = (relPath: string) => (content: string) => {
-    writeFile(path.join(config.targetDir, relPath), content)
-    clack.log.success(`Created ${relPath}`)
-  }
+  const write = createWriter(config.targetDir)
 
   write(freshConfig.paths.apiRoute)(generateStreamObjectRoute(freshConfig))
 

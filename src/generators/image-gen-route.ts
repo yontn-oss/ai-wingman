@@ -1,6 +1,6 @@
 import type { ImageGenConfig } from '../types.js'
-import { read, render, inject } from '../utils/template.js'
-import { authStub } from './stubs.js'
+import { read, render } from '../utils/template.js'
+import { injectAuth } from './stubs.js'
 import { MAX_DURATION_HEAVY } from '../defaults.js'
 
 export function generateImageGenRoute(config: ImageGenConfig): string {
@@ -9,10 +9,6 @@ export function generateImageGenRoute(config: ImageGenConfig): string {
     __MAX_DURATION__: MAX_DURATION_HEAVY,
     __IMAGE_MODEL__: config.imageModel,
   })
-  t = inject(t, 'AUTH_IMPORT', config.auth ? `import { auth } from '${config.pathAlias}auth'` : '')
-  t = inject(t, 'AUTH_CHECK', config.auth
-    ? `  const session = await auth()\n  if (!session) return new Response('Unauthorized', { status: 401 })`
-    : authStub(config.pathAlias)
-  )
+  t = injectAuth(t, config.auth, config.pathAlias)
   return t
 }

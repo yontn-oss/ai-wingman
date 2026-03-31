@@ -1,5 +1,3 @@
-import * as clack from '@clack/prompts'
-import path from 'node:path'
 import { generateAudioTranscribeRoute } from '../../generators/audio-transcribe-route.js'
 import { generateAudioSpeechRoute } from '../../generators/audio-speech-route.js'
 import { generateAudioPage } from '../../generators/audio-page.js'
@@ -8,7 +6,7 @@ import { runAiElements } from '../../steps/run-ai-elements.js'
 import { runShadcn } from '../../steps/run-shadcn.js'
 import { fixFontVars, fixDarkMode } from '../../steps/fix-font-vars.js'
 import { detectPathAlias } from '../../utils/detect-path-alias.js'
-import { writeFile } from '../../utils/write-file.js'
+import { createWriter } from '../../utils/write-file.js'
 import type { AudioConfig, SharedConfig } from '../../types.js'
 
 export async function executeAudioPattern(
@@ -18,10 +16,7 @@ export async function executeAudioPattern(
   const { prefix: pathAlias } = detectPathAlias(config.targetDir)
   const freshConfig: AudioConfig = { ...config, pathAlias }
 
-  const write = (relPath: string) => (content: string) => {
-    writeFile(path.join(config.targetDir, relPath), content)
-    clack.log.success(`Created ${relPath}`)
-  }
+  const write = createWriter(config.targetDir)
 
   if (freshConfig.includeTranscribe && freshConfig.paths.transcribeRoute) {
     write(freshConfig.paths.transcribeRoute)(generateAudioTranscribeRoute(freshConfig))

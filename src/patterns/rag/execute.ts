@@ -1,5 +1,3 @@
-import * as clack from '@clack/prompts'
-import path from 'node:path'
 import { generateRagEmbedRoute } from '../../generators/rag-embed-route.js'
 import { generateRagQueryRoute } from '../../generators/rag-query-route.js'
 import { generateRagStore } from '../../generators/rag-store.js'
@@ -11,7 +9,7 @@ import { generateRagChunker } from '../../generators/rag-chunker.js'
 import { generateRagHook } from '../../generators/rag-hook.js'
 import { ensureAtAlias } from '../../steps/ensure-at-alias.js'
 import { detectPathAlias } from '../../utils/detect-path-alias.js'
-import { writeFile } from '../../utils/write-file.js'
+import { createWriter } from '../../utils/write-file.js'
 import type { RagPatternConfig, SharedConfig } from '../../types.js'
 
 export async function executeRagPattern(
@@ -22,10 +20,7 @@ export async function executeRagPattern(
   const { prefix: pathAlias } = detectPathAlias(config.targetDir)
   const freshConfig: RagPatternConfig = { ...config, pathAlias }
 
-  const write = (relPath: string) => (content: string) => {
-    writeFile(path.join(config.targetDir, relPath), content)
-    clack.log.success(`Created ${relPath}`)
-  }
+  const write = createWriter(config.targetDir)
 
   write(freshConfig.paths.embedRoute)(generateRagEmbedRoute(freshConfig))
   write(freshConfig.paths.queryRoute)(generateRagQueryRoute(freshConfig))

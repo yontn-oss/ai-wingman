@@ -59,7 +59,6 @@ export async function addCommand(patternId: string, opts: AddChatOptions, comman
     process.exit(1)
   }
 
-  // We only support one pattern at a time
   const [pattern] = patterns
 
   const invalidFlags = validateFlags(pattern!, command)

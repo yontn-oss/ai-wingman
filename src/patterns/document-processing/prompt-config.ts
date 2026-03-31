@@ -27,7 +27,7 @@ export async function promptDocumentProcessingConfig(
     const input = await clack.text({
       message: 'Schema / type name (used for the Zod schema and TypeScript type)',
       placeholder: 'document',
-      validate: (v) => (v.trim() ? undefined : 'Required'),
+      validate: (v) => (v?.trim() ? undefined : 'Required'),
     })
     if (clack.isCancel(input)) { clack.cancel('Cancelled.'); process.exit(0) }
     schemaName = (input as string).trim() || 'document'

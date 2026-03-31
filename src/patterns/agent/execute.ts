@@ -1,5 +1,3 @@
-import * as clack from '@clack/prompts'
-import path from 'node:path'
 import { generateAgentRoute } from '../../generators/agent-route.js'
 import { generateAgentPage } from '../../generators/agent-page.js'
 import { generateStorage } from '../../generators/storage.js'
@@ -9,7 +7,7 @@ import { runAiElements } from '../../steps/run-ai-elements.js'
 import { runShadcn } from '../../steps/run-shadcn.js'
 import { fixFontVars, fixDarkMode } from '../../steps/fix-font-vars.js'
 import { detectPathAlias } from '../../utils/detect-path-alias.js'
-import { writeFile } from '../../utils/write-file.js'
+import { createWriter } from '../../utils/write-file.js'
 import type { AgentConfig, SharedConfig, ToolsConfig } from '../../types.js'
 
 export async function executeAgentPattern(
@@ -19,10 +17,7 @@ export async function executeAgentPattern(
   const { prefix: pathAlias } = detectPathAlias(config.targetDir)
   const freshConfig: AgentConfig = { ...config, pathAlias }
 
-  const write = (relPath: string) => (content: string) => {
-    writeFile(path.join(config.targetDir, relPath), content)
-    clack.log.success(`Created ${relPath}`)
-  }
+  const write = createWriter(config.targetDir)
 
   write(freshConfig.paths.apiRoute)(generateAgentRoute(freshConfig))
   write(freshConfig.paths.storage)(generateStorage())

@@ -1,8 +1,8 @@
 import type { HybridSearchConfig } from '../types.js'
-import { read, render, inject } from '../utils/template.js'
+import { read, render } from '../utils/template.js'
 import { toImportPath } from '../utils/to-import-path.js'
 import { embeddingCallExpr } from '../utils/provider-call-expr.js'
-import { authStub } from './stubs.js'
+import { injectAuth } from './stubs.js'
 
 export function generateHybridSearchRoute(config: HybridSearchConfig): string {
   let t = read('hybrid-search-route.ts')
@@ -15,10 +15,6 @@ export function generateHybridSearchRoute(config: HybridSearchConfig): string {
     __BM25_IMPORT_PATH__: toImportPath(config.paths.bm25, config.pathAlias),
     __RERANKER_IMPORT_PATH__: toImportPath(config.paths.reranker, config.pathAlias),
   })
-  t = inject(t, 'AUTH_IMPORT', config.auth ? `import { auth } from '${config.pathAlias}auth'` : '')
-  t = inject(t, 'AUTH_CHECK', config.auth
-    ? `  const session = await auth()\n  if (!session) return new Response('Unauthorized', { status: 401 })`
-    : authStub(config.pathAlias)
-  )
+  t = injectAuth(t, config.auth, config.pathAlias)
   return t
 }

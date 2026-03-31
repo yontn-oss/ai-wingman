@@ -1,20 +1,16 @@
 import * as clack from '@clack/prompts'
-import path from 'node:path'
 import { generateEvalScript } from '../../generators/eval-script.js'
 import { generateEvalDatasetJsonl } from '../../generators/eval-dataset-jsonl.js'
 import { generateEvalDatasetRunner } from '../../generators/eval-dataset-runner.js'
 import { generateEvalDatasetWorkflow } from '../../generators/eval-dataset-workflow.js'
-import { writeFile } from '../../utils/write-file.js'
+import { createWriter } from '../../utils/write-file.js'
 import type { EvalConfig, SharedConfig } from '../../types.js'
 
 export async function executeEvalPattern(
   config: EvalConfig,
   _shared: SharedConfig
 ): Promise<void> {
-  const write = (relPath: string) => (content: string) => {
-    writeFile(path.join(config.targetDir, relPath), content)
-    clack.log.success(`Created ${relPath}`)
-  }
+  const write = createWriter(config.targetDir)
 
   if (config.useDataset) {
     write(config.paths.dataset!)(generateEvalDatasetJsonl())

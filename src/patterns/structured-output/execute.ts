@@ -1,11 +1,9 @@
-import * as clack from '@clack/prompts'
-import path from 'node:path'
 import { generateStructuredOutputRoute } from '../../generators/structured-output-route.js'
 import { generateStructuredOutputSchema } from '../../generators/structured-output-schema.js'
 import { generateStructuredOutputHook } from '../../generators/structured-output-hook.js'
 import { ensureAtAlias } from '../../steps/ensure-at-alias.js'
 import { detectPathAlias } from '../../utils/detect-path-alias.js'
-import { writeFile } from '../../utils/write-file.js'
+import { createWriter } from '../../utils/write-file.js'
 import type { SharedConfig, StructuredOutputConfig } from '../../types.js'
 
 export async function executeStructuredOutputPattern(
@@ -19,10 +17,7 @@ export async function executeStructuredOutputPattern(
   const { prefix: pathAlias } = detectPathAlias(config.targetDir)
   const freshConfig: StructuredOutputConfig = { ...config, pathAlias }
 
-  const write = (relPath: string) => (content: string) => {
-    writeFile(path.join(config.targetDir, relPath), content)
-    clack.log.success(`Created ${relPath}`)
-  }
+  const write = createWriter(config.targetDir)
 
   write(freshConfig.paths.apiRoute)(generateStructuredOutputRoute(freshConfig))
   write(freshConfig.paths.schema)(generateStructuredOutputSchema(freshConfig.schemaName))
