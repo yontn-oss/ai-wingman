@@ -7,6 +7,7 @@ import { EngineToggle } from '@/components/engine-toggle'
 import type { CurationEngine } from '@/components/engine-toggle'
 import { TrackCard } from '@/components/track-card'
 import type { SetlistTrack } from '@/lib/tools'
+import { CAMELOT_COLORS } from '@/lib/camelot'
 
 interface LaterTrack {
   track: SetlistTrack
@@ -18,9 +19,9 @@ type HistoryStatus = 'played' | 'skipped' | 'later'
 interface HistoryEntry { track: SetlistTrack; status: HistoryStatus }
 
 const STATUS_COLOR: Record<HistoryStatus, string> = {
-  played:  '#4ade80',
+  played: '#4ade80',
   skipped: '#f87171',
-  later:   '#a78bfa',
+  later: '#a78bfa',
 }
 
 function isCoolingDown(lt: LaterTrack, playedCount: number): boolean {
@@ -92,14 +93,14 @@ function CardSkeleton() {
         {/* Row 4: transition note — 4 lines × 21px = 84px ≈ minHeight 83.2px in TrackCard */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           <div style={{ ...SHIMMER, width: '100%', height: 21, borderRadius: 4 }} />
-          <div style={{ ...SHIMMER, width: '95%',  height: 21, borderRadius: 4 }} />
-          <div style={{ ...SHIMMER, width: '88%',  height: 21, borderRadius: 4 }} />
-          <div style={{ ...SHIMMER, width: '60%',  height: 21, borderRadius: 4 }} />
+          <div style={{ ...SHIMMER, width: '95%', height: 21, borderRadius: 4 }} />
+          <div style={{ ...SHIMMER, width: '88%', height: 21, borderRadius: 4 }} />
+          <div style={{ ...SHIMMER, width: '60%', height: 21, borderRadius: 4 }} />
         </div>
 
         {/* Row 5: actions — actual rendered: 74.5px → pt:16 + border:1 + button:57 */}
         <div style={{ borderTop: '1px solid #1a1a22', paddingTop: 16, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-          {[0,1,2,3].map(i => (
+          {[0, 1, 2, 3].map(i => (
             <div key={i} style={{ ...SHIMMER, height: 57, borderRadius: 10 }} />
           ))}
         </div>
@@ -132,7 +133,7 @@ export default function Home() {
     try {
       const saved = localStorage.getItem('party-wingman-history')
       if (saved) setHistoryLog(JSON.parse(saved) as HistoryEntry[])
-    } catch {}
+    } catch { }
     historyLoadedRef.current = true
   }, [])
 
@@ -141,7 +142,7 @@ export default function Home() {
     if (!historyLoadedRef.current) return
     try {
       localStorage.setItem('party-wingman-history', JSON.stringify(historyLog))
-    } catch {}
+    } catch { }
   }, [historyLog])
 
   const sessionRef = useRef({ vibe, mode, engine, currentTrack, played, banned, later, bannedArtists })
@@ -250,10 +251,10 @@ export default function Home() {
     }
     const newLater = existing
       ? later.map((lt) =>
-          lt.track.spotifyId === suggestion.spotifyId
-            ? { ...lt, dismissCount: lt.dismissCount + 1, playedCountAtDismissal: played.length }
-            : lt
-        )
+        lt.track.spotifyId === suggestion.spotifyId
+          ? { ...lt, dismissCount: lt.dismissCount + 1, playedCountAtDismissal: played.length }
+          : lt
+      )
       : [...later, { track: suggestion, dismissCount: 1, playedCountAtDismissal: played.length }]
     setLater(newLater)
     void fetchSuggestion({ later: newLater })
@@ -355,7 +356,7 @@ export default function Home() {
                   style={{
                     fontFamily: 'var(--font-ibm-mono)',
                     fontSize: 11,
-                    color: '#22d3ee',
+                    color: CAMELOT_COLORS[currentTrack.camelotKey]?.text ?? '#22d3ee',
                     letterSpacing: '0.1em',
                   }}
                 >
@@ -719,7 +720,7 @@ export default function Home() {
                           {entry.track.artist}
                         </span>
                         {entry.track.camelotKey && (
-                          <span style={{ fontFamily: 'var(--font-ibm-mono)', fontSize: 9, color: '#22d3ee', letterSpacing: '0.1em', flexShrink: 0 }}>
+                          <span style={{ fontFamily: 'var(--font-ibm-mono)', fontSize: 9, color: CAMELOT_COLORS[entry.track.camelotKey]?.text ?? '#22d3ee', letterSpacing: '0.1em', flexShrink: 0 }}>
                             {entry.track.camelotKey}
                           </span>
                         )}
