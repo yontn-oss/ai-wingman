@@ -1,7 +1,12 @@
 import { tool } from 'ai'
 import { z } from 'zod'
-import { searchTracks, getRelatedArtists } from './spotify'
+import { searchTracks, searchArtist } from './spotify'
 import { checkCompatibility } from './camelot'
+
+const DEBUG = process.env.WINGMAN_DEBUG === '1'
+function dbg(label: string, data: unknown) {
+  if (DEBUG) console.log(`[wingman:tool] ${label}`, JSON.stringify(data, null, 2))
+}
 
 export interface SetlistTrack {
   spotifyId: string
@@ -17,47 +22,53 @@ export interface SetlistTrack {
 
 export const djTools = {
   search_tracks: tool({
-    description:
-      'Search Spotify for tracks matching a vibe, genre, or description. Returns id, name, artist, artistId, and popularity.',
+    description: [
+      'Search Spotify for tracks. Returns id, name, artist, artistId, releaseYear, durationMs.',
+      'Supports Spotify field filters in the query string:',
+      '  - artist:ArtistName  — tracks by a specific artist (e.g. "artist:Autechre")',
+      '  - Use field filters for artist-graph mode to get tracks by a named artist precisely.',
+    ].join('\n'),
     inputSchema: z.object({
-      query: z.string().describe('Search query describing the vibe, genre, or track'),
+      query: z.string().describe(
+        'Search query. Use plain text for vibe/genre searches. Use artist:Name syntax to find tracks by a specific artist.'
+      ),
       limit: z
         .number()
         .min(1)
-        .max(20)
+        .max(10)
         .optional()
         .default(10)
-        .describe('Number of results to return (default 10, max 20)'),
+        .describe('Number of results to return (1–10, default 10)'),
+      offset: z
+        .number()
+        .min(0)
+        .optional()
+        .default(0)
+        .describe('Pagination offset — use multiples of limit to fetch the next page'),
     }),
-    async execute({ query, limit }) {
-      const tracks = await searchTracks(query, limit ?? 10)
-      return tracks.map(({ id, name, artist, artistId, popularity, releaseYear, durationMs }) => ({
-        id,
-        name,
-        artist,
-        artistId,
-        popularity,
-        releaseYear,
-        durationMs,
+    async execute({ query, limit, offset }) {
+      dbg('search_tracks:input', { query, limit, offset })
+      const tracks = await searchTracks(query, limit ?? 10, offset ?? 0)
+      const result = tracks.map(({ id, name, artist, artistId, releaseYear, durationMs }) => ({
+        id, name, artist, artistId, releaseYear, durationMs,
       }))
+      dbg('search_tracks:output', result)
+      return result
     },
   }),
 
-  get_related_artists: tool({
+  search_artist: tool({
     description:
-      'Get artists similar to a given Spotify artist ID. Useful for finding artists in the same vibe space as the current track\'s artist. Returns top 10 by popularity.',
+      'Search Spotify for an artist by name (type=artist). Returns matching artists with their Spotify ID and genres. Use this in artist-graph mode to confirm the seed artist and get their genres.',
     inputSchema: z.object({
-      artistId: z.string().describe('Spotify artist ID from search_tracks results'),
+      name: z.string().describe('Artist name to search for'),
     }),
-    async execute({ artistId }) {
-      try {
-        const artists = await getRelatedArtists(artistId)
-        const sorted = artists.sort((a, b) => b.popularity - a.popularity).slice(0, 10)
-        return sorted.map(({ id, name, genres, popularity }) => ({ id, name, genres, popularity }))
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        return { error: message, fallback: 'Use additional search_tracks calls instead' }
-      }
+    async execute({ name }) {
+      dbg('search_artist:input', { name })
+      const artists = await searchArtist(name)
+      const result = artists.map(({ id, name, genres }) => ({ id, name, genres }))
+      dbg('search_artist:output', result)
+      return result
     },
   }),
 
@@ -87,7 +98,8 @@ export const djTools = {
       energy: z.number(),
       transitionNote: z.string().describe('Why this track fits here — harmonic move, energy shift, vibe connection'),
     }),
-    async execute() {
+    async execute(input) {
+      dbg('suggest_track:input', input)
       return { success: true }
     },
   }),

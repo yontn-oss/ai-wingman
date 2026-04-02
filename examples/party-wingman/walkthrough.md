@@ -25,12 +25,10 @@ graph TB
             model["gpt-5.4-nano\n+ system prompt\n(engine rules + mode strategy)"]
         end
 
-        subgraph tools["lib/tools.ts  ←  wingman scaffold"]
-            st["search_tracks\nSpotify discovery\nreturns releaseYear"]
-            ra["get_related_artists\nArtist Graph expansion"]
-            ck["check_key_compatibility\nCamelot wheel · pure fn"]
-            sg["suggest_track\ntyped delivery channel\nexecute() → { success }"]
-        end
+        ra["search_artist\nConfirm seed artist"]
+        ck["check_key_compatibility\nCamelot wheel · pure fn"]
+        sg["suggest_track\ntyped delivery channel\nexecute() → { success }"]
+    end
 
         camelot["lib/camelot.ts"]
         spotifylib["lib/spotify.ts\nClient Credentials OAuth"]
@@ -156,16 +154,15 @@ Adjacency wraps at 12↔1 — `12A` and `1A` are adjacent. Easy to get wrong wit
 
 Three functions, one token cache. Client Credentials OAuth: fetch token on first request, cache with a 60-second safety buffer before expiry, reuse until near-expiry.
 
-- `searchTracks(query, limit)` — returns `{ id, name, artist, artistId, popularity, releaseYear }[]`. The `artistId` passthrough is deliberate: Artist Graph mode needs it without a separate lookup. `releaseYear` is parsed from `album.release_date.slice(0, 4)`.
-- `getRelatedArtists(artistId)` — deprecated but functional. Used for Artist Graph discovery. Handle gracefully if it fails.
+- `searchTracks(query, limit)` — returns `{ id, name, artist, artistId, releaseYear, durationMs }[]`. The `artistId` passthrough is deliberate: Artist Graph mode needs it without a separate lookup. `releaseYear` is parsed from `album.release_date.slice(0, 4)`.
 
 ### `lib/tools.ts` — four tools, one type
 
-Replace `my-tool.tools.ts` (or create `lib/tools.ts` directly) with the DJ tools:
+Replace `lib/tools.ts` with the DJ tools:
 
 ```ts
 export interface SetlistTrack {
-  spotifyId: string         // from search_tracks — enables direct Spotify links
+  spotifyId: string         // from search_tracks
   name: string
   artist: string
   releaseYear: number       // from search_tracks (album.release_date); 0 if unavailable
@@ -176,8 +173,8 @@ export interface SetlistTrack {
 }
 
 export const djTools = {
-  search_tracks:            // Discovery: find tracks by vibe. Returns id, name, artist, artistId, popularity, releaseYear.
-  get_related_artists:      // Graph expansion. try/catch with structured fallback.
+  search_tracks:            // Discovery: find tracks by vibe. Returns id, name, artist, artistId, releaseYear, durationMs.
+  search_artist:            // Confirm seed artist & get genres.
   check_key_compatibility:  // Pure, synchronous. Two Camelot keys → compatible + relationship string.
   suggest_track:            // Delivery. execute() returns { success: true }. Payload is in the tool input.
 }
@@ -247,7 +244,7 @@ This is the model's "memory." There is no conversation history, no thread — ju
 
 [mode strategy appended]
   vibe-search:  search from 2–3 different angles → pick the single best → suggest_track
-  artist-graph: seed search → get_related_artists → search by related artists → suggest_track
+  artist-graph: search_artist → infer genres → expand pool by genre → suggest_track
   tight-set:    single focused search → pick best result → suggest_track
 ```
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { CheckIcon, XIcon, ClockIcon, UserXIcon } from 'lucide-react'
+import { CheckIcon, XIcon, ClockIcon, UserXIcon, PlayIcon } from 'lucide-react'
 import type { SetlistTrack } from '@/lib/tools'
 import { CAMELOT_COLORS } from '@/lib/camelot'
 
@@ -93,10 +93,15 @@ export function TrackCard({ track, onYes, onNo, onLater, onBanArtist }: TrackCar
     >
       <div
         className="rounded-2xl overflow-hidden"
-        style={{ background: '#0e0e15', border: '1px solid #1e1e28' }}
+        style={{ background: '#0e0e15', border: '1px solid #1e1e28', position: 'relative' }}
       >
         {/* Top accent line */}
         <div style={{ height: 2, background: 'linear-gradient(90deg, transparent 0%, #f59e0b 40%, #22d3ee 60%, transparent 100%)' }} />
+
+        {/* Disclaimer footnote */}
+        <div style={{ position: 'absolute', top: 12, right: 16, opacity: 0.4, fontSize: 7, fontFamily: 'var(--font-ibm-mono)', color: '#a1a1aa', pointerEvents: 'none', zIndex: 100 }}>
+          AI ESTIMATED METADATA
+        </div>
 
         <div className="p-6 flex flex-col gap-5">
 
@@ -132,12 +137,24 @@ export function TrackCard({ track, onYes, onNo, onLater, onBanArtist }: TrackCar
 
           {/* Row 2: Track name + artist */}
           <div>
-            <h2
-              className="text-white font-bold leading-tight mb-1"
-              style={{ fontSize: 'clamp(20px, 5vw, 26px)', letterSpacing: '-0.01em', lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-            >
-              {track.name}
-            </h2>
+            <div className="flex items-center justify-between gap-3 mb-1">
+              <h2
+                className="text-white font-bold leading-tight flex-1"
+                style={{ fontSize: 'clamp(20px, 5vw, 26px)', letterSpacing: '-0.01em', lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              >
+                {track.name}
+              </h2>
+              <a
+                href={spotifyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open in Spotify"
+                className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-mono text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/40 transition-all border border-transparent hover:border-zinc-700/50"
+                onClick={(e) => e.stopPropagation()}
+              >
+                OPEN
+              </a>
+            </div>
             <p
               className="font-mono uppercase"
               style={{ color: '#71717a', fontSize: 11, letterSpacing: '0.18em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}

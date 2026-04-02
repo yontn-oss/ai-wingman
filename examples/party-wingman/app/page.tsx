@@ -7,6 +7,8 @@ import { EngineToggle } from '@/components/engine-toggle'
 import type { CurationEngine } from '@/components/engine-toggle'
 import { TrackCard } from '@/components/track-card'
 import type { SetlistTrack } from '@/lib/tools'
+import type { ArtistGraphCtx } from '@/app/api/suggest/route'
+import type { SpotifyArtist } from '@/lib/spotify'
 import { CAMELOT_COLORS } from '@/lib/camelot'
 
 interface LaterTrack {
@@ -16,7 +18,7 @@ interface LaterTrack {
 }
 
 type HistoryStatus = 'played' | 'skipped' | 'later'
-interface HistoryEntry { track: SetlistTrack; status: HistoryStatus }
+interface HistoryEntry { track: SetlistTrack; status: HistoryStatus; feedback?: 'on-track' | 'off-track' }
 
 const STATUS_COLOR: Record<HistoryStatus, string> = {
   played: '#4ade80',
@@ -114,7 +116,7 @@ export default function Home() {
   const [suggestion, setSuggestion] = useState<SetlistTrack | null>(null)
   const [currentTrack, setCurrentTrack] = useState<SetlistTrack | null>(null)
   const [played, setPlayed] = useState<SetlistTrack[]>([])
-  const [banned, setBanned] = useState<SetlistTrack[]>([])
+  const [skipped, setSkipped] = useState<SetlistTrack[]>([])
   const [later, setLater] = useState<LaterTrack[]>([])
   const [bannedArtists, setBannedArtists] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -122,17 +124,40 @@ export default function Home() {
   const [mode, setMode] = useState<DiscoveryMode>('vibe-search')
   const [engine, setEngine] = useState<CurationEngine>('camelot')
   const [sessionActive, setSessionActive] = useState(false)
-  const [confirmingSwitch, setConfirmingSwitch] = useState(false)
+  const [isEditingVibe, setIsEditingVibe] = useState(false)
+  const [artistGraphCtx, setArtistGraphCtx] = useState<ArtistGraphCtx | null>(null)
+  const artistGraphCtxRef = useRef<ArtistGraphCtx | null>(null)
+  artistGraphCtxRef.current = artistGraphCtx
+
+  // Artist picker state (artist-graph mode only)
+  const [artistCandidates, setArtistCandidates] = useState<SpotifyArtist[] | null>(null)
+  const [pickerLoading, setPickerLoading] = useState(false)
+  const [pickerLoadingMore, setPickerLoadingMore] = useState(false)
+  const [pickerQuery, setPickerQuery] = useState('')
+  const [pickerOffset, setPickerOffset] = useState(0)
+  const [pickerHasMore, setPickerHasMore] = useState(false)
+  const confirmedArtistRef = useRef<{ id: string; name: string } | null>(null)
+
   const [historyLog, setHistoryLog] = useState<HistoryEntry[]>([])
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyFilter, setHistoryFilter] = useState<HistoryStatus | 'all'>('all')
   const historyLoadedRef = useRef(false)
 
-  // Load persisted history on mount
+  // Load persisted history on mount — version-gated to flush stale data from old pipeline
+  const HISTORY_KEY = 'party-wingman-history'
+  const HISTORY_VERSION = 2  // bump to flush cached data when track schema changes
+
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('party-wingman-history')
-      if (saved) setHistoryLog(JSON.parse(saved) as HistoryEntry[])
+      const version = Number(localStorage.getItem('party-wingman-history-version') ?? '0')
+      if (version === HISTORY_VERSION) {
+        const saved = localStorage.getItem(HISTORY_KEY)
+        if (saved) setHistoryLog(JSON.parse(saved) as HistoryEntry[])
+      } else {
+        // Stale version — clear legacy data
+        localStorage.removeItem(HISTORY_KEY)
+        localStorage.setItem('party-wingman-history-version', String(HISTORY_VERSION))
+      }
     } catch { }
     historyLoadedRef.current = true
   }, [])
@@ -141,22 +166,25 @@ export default function Home() {
   useEffect(() => {
     if (!historyLoadedRef.current) return
     try {
-      localStorage.setItem('party-wingman-history', JSON.stringify(historyLog))
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(historyLog))
     } catch { }
   }, [historyLog])
 
-  const sessionRef = useRef({ vibe, mode, engine, currentTrack, played, banned, later, bannedArtists })
-  sessionRef.current = { vibe, mode, engine, currentTrack, played, banned, later, bannedArtists }
+  const sessionRef = useRef({ vibe, mode, engine, currentTrack, played, skipped, later, bannedArtists })
+  sessionRef.current = { vibe, mode, engine, currentTrack, played, skipped, later, bannedArtists }
 
   const pendingFeedbackRef = useRef<'on-track' | 'off-track' | undefined>(undefined)
   const [pendingFeedback, setPendingFeedback] = useState<'on-track' | 'off-track' | undefined>(undefined)
   const abortRef = useRef<AbortController | null>(null)
 
+  const historyLogRef = useRef<HistoryEntry[]>([])
+  historyLogRef.current = historyLog
+
   const fetchSuggestion = useCallback(async (overrides?: Partial<typeof sessionRef.current & { feedback: 'on-track' | 'off-track' }>) => {
     const feedback = overrides?.feedback ?? pendingFeedbackRef.current
     pendingFeedbackRef.current = undefined
     setPendingFeedback(undefined)
-    const { vibe, mode, engine, currentTrack, played, banned, later, bannedArtists } = { ...sessionRef.current, ...overrides }
+    const { vibe, mode, engine, currentTrack, played, skipped, later, bannedArtists } = { ...sessionRef.current, ...overrides }
     if (!vibe.trim()) return
     abortRef.current?.abort()
     const controller = new AbortController()
@@ -166,20 +194,29 @@ export default function Home() {
       const playedCount = played.length
       const availableLater = later.filter((lt) => !isCoolingDown(lt, playedCount)).map((lt) => lt.track)
       const coolingDown = later.filter((lt) => isCoolingDown(lt, playedCount)).map((lt) => lt.track.spotifyId)
+      // Collect all rated history to send richer context to the model
+      const ratedHistory = historyLogRef.current
+        .filter(e => e.feedback)
+        .map(e => ({ name: e.track.name, artist: e.track.artist, feedback: e.feedback! }))
       const res = await fetch('/api/suggest', {
         method: 'POST',
         signal: controller.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           vibe, mode, engine, currentTrack,
-          excluded: [...played, ...banned].map((t) => t.spotifyId).concat(coolingDown),
+          excluded: [...played, ...skipped].map((t) => t.spotifyId).concat(coolingDown),
           later: availableLater,
           bannedArtists,
           feedback,
+          ratedHistory: ratedHistory.length > 0 ? ratedHistory : undefined,
+          artistGraphCtx: mode === 'artist-graph' ? artistGraphCtxRef.current : undefined,
+          confirmedArtistId: mode === 'artist-graph' && !artistGraphCtxRef.current ? confirmedArtistRef.current?.id : undefined,
+          confirmedArtistName: mode === 'artist-graph' && !artistGraphCtxRef.current ? confirmedArtistRef.current?.name : undefined,
         }),
       })
-      const data = (await res.json()) as { track: SetlistTrack | null }
+      const data = (await res.json()) as { track: SetlistTrack | null; artistGraphCtx?: ArtistGraphCtx | null }
       setSuggestion(data.track)
+      if (data.artistGraphCtx) setArtistGraphCtx(data.artistGraphCtx)
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return
       throw err
@@ -188,10 +225,53 @@ export default function Home() {
     }
   }, [])
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setIsEditingVibe(false)
+    handleSwitchVibes()
+
+    if (mode === 'artist-graph' && !artistGraphCtxRef.current) {
+      // Show artist picker before starting the session
+      const artistName = vibe.trim()
+      if (!artistName) return
+      setPickerQuery(artistName)
+      setPickerOffset(0)
+      setPickerLoading(true)
+      try {
+        const res = await fetch(`/api/artist-search?q=${encodeURIComponent(artistName)}&offset=0`)
+        const data = (await res.json()) as { artists: SpotifyArtist[]; hasMore: boolean }
+        setArtistCandidates(data.artists)
+        setPickerHasMore(data.hasMore)
+        setPickerOffset(10)
+      } finally {
+        setPickerLoading(false)
+      }
+      return
+    }
+
     setSessionActive(true)
     void fetchSuggestion()
+  }
+
+  function handlePickArtist(artist: SpotifyArtist) {
+    handleSwitchVibes()                                              // resets everything (including confirmedArtistRef = null)
+    confirmedArtistRef.current = { id: artist.id, name: artist.name } // set AFTER so it survives
+    setSessionActive(true)
+    void fetchSuggestion()
+  }
+
+  async function handleLoadMore() {
+    if (!pickerQuery || pickerLoadingMore) return
+    setPickerLoadingMore(true)
+    try {
+      const res = await fetch(`/api/artist-search?q=${encodeURIComponent(pickerQuery)}&offset=${pickerOffset}`)
+      const data = (await res.json()) as { artists: SpotifyArtist[]; hasMore: boolean }
+      setArtistCandidates(prev => [...(prev ?? []), ...data.artists])
+      setPickerHasMore(data.hasMore)
+      setPickerOffset(o => o + 10)
+    } finally {
+      setPickerLoadingMore(false)
+    }
   }
 
   function handleSwitchVibes() {
@@ -200,46 +280,72 @@ export default function Home() {
     setSuggestion(null)
     setCurrentTrack(null)
     setPlayed([])
-    setBanned([])
+    setSkipped([])
     setLater([])
     setBannedArtists([])
     pendingFeedbackRef.current = undefined
     setPendingFeedback(undefined)
     setLoading(false)
-    setConfirmingSwitch(false)
+
     setSessionActive(false)
+    setArtistGraphCtx(null)
+    artistGraphCtxRef.current = null   // sync reset — setArtistGraphCtx is async (next render)
+    setArtistCandidates(null)
+    setPickerHasMore(false)
+    setPickerOffset(0)
+    setPickerQuery('')
+    confirmedArtistRef.current = null
   }
 
   function handleYes() {
     if (!suggestion) return
     const accepted = suggestion
+    const fb = pendingFeedbackRef.current
     const newPlayed = [...sessionRef.current.played, accepted]
     setPlayed(newPlayed)
     setCurrentTrack(accepted)
-    setHistoryLog(log => [...log, { track: accepted, status: 'played' }])
+    setHistoryLog(log => [...log, { track: accepted, status: 'played', ...(fb && { feedback: fb }) }])
     void fetchSuggestion({ currentTrack: accepted, played: newPlayed })
   }
 
   function handleNo() {
     if (!suggestion) return
-    setHistoryLog(log => [...log, { track: suggestion, status: 'skipped' }])
-    const newBanned = [...sessionRef.current.banned, suggestion]
-    setBanned(newBanned)
-    void fetchSuggestion({ banned: newBanned })
+    const fb = pendingFeedbackRef.current
+    setHistoryLog(log => [...log, { track: suggestion, status: 'skipped', ...(fb && { feedback: fb }) }])
+    const newSkipped = [...sessionRef.current.skipped, suggestion]
+    setSkipped(newSkipped)
+    void fetchSuggestion({ skipped: newSkipped })
   }
 
   function handleBanArtist() {
     if (!suggestion) return
+    const fb = pendingFeedbackRef.current
+    setHistoryLog(log => [...log, { track: suggestion, status: 'skipped', ...(fb && { feedback: fb }) }])
+
     const artist = suggestion.artist
     const newBannedArtists = [...sessionRef.current.bannedArtists ?? [], artist]
     setBannedArtists(newBannedArtists)
-    void fetchSuggestion({ bannedArtists: newBannedArtists })
+
+    // Also skip this specific track for the session
+    const newSkipped = [...sessionRef.current.skipped, suggestion]
+    setSkipped(newSkipped)
+
+    void fetchSuggestion({ bannedArtists: newBannedArtists, skipped: newSkipped })
   }
 
   function handleFeedback(feedback: 'on-track' | 'off-track') {
     const next = pendingFeedback === feedback ? undefined : feedback
     pendingFeedbackRef.current = next
     setPendingFeedback(next)
+  }
+
+  function handleHistoryFeedback(index: number, feedback: 'on-track' | 'off-track') {
+    setHistoryLog(log => log.map((entry, i) => {
+      if (i !== index) return entry
+      // Toggle off if already set to this value
+      const next = entry.feedback === feedback ? undefined : feedback
+      return { ...entry, feedback: next }
+    }))
   }
 
   function handleLater() {
@@ -284,6 +390,144 @@ export default function Home() {
         }}
       />
 
+      {/* Artist picker overlay (artist-graph mode) */}
+      {(pickerLoading || artistCandidates) && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(8,8,13,0.85)', backdropFilter: 'blur(12px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+            animation: 'fade-in 0.2s ease',
+          }}
+        >
+          <div style={{
+            width: '100%', maxWidth: 400,
+            background: 'rgba(22,22,32,0.95)',
+            border: '1px solid rgba(245,158,11,0.25)',
+            borderRadius: 20,
+            padding: 28,
+            boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+            maxHeight: 'calc(100vh - 80px)',
+            display: 'flex', flexDirection: 'column',
+            overflow: 'hidden',
+          }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: '#e4e4f0', marginBottom: 6 }}>
+              Select the artist
+            </h2>
+            <p style={{ fontSize: 13, color: '#6b6b8a', marginBottom: 20 }}>
+              Which artist did you mean?
+            </p>
+
+            {pickerLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: '50%',
+                  border: '3px solid #1e1e2c',
+                  borderTopColor: '#f59e0b',
+                  animation: 'spin 0.7s linear infinite',
+                }} />
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto', maxHeight: 380, paddingRight: 4 }}>
+                {(artistCandidates ?? []).map(artist => (
+                  <button
+                    key={artist.id}
+                    onClick={() => handlePickArtist(artist)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 14,
+                      padding: '10px 14px',
+                      background: 'rgba(255,255,255,0.04)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: 12,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'border-color 0.15s, background 0.15s',
+                    }}
+                    onMouseEnter={e => {
+                      ; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(245,158,11,0.5)'
+                        ; (e.currentTarget as HTMLButtonElement).style.background = 'rgba(245,158,11,0.06)'
+                    }}
+                    onMouseLeave={e => {
+                      ; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.08)'
+                        ; (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)'
+                    }}
+                  >
+                    {artist.imageUrl ? (
+                      <img
+                        src={artist.imageUrl}
+                        alt={artist.name}
+                        style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: 44, height: 44, borderRadius: 8, flexShrink: 0,
+                        background: '#1e1e2c', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 18, color: '#3a3a4a',
+                      }}>♪</div>
+                    )}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#e4e4f0', marginBottom: 2 }}>
+                        {artist.name}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#6b6b8a' }}>
+                        {(artist.genres ?? []).slice(0, 2).join(', ')}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+
+                {/* Load more */}
+                {pickerHasMore && (
+                  <button
+                    onClick={handleLoadMore}
+                    disabled={pickerLoadingMore}
+                    style={{
+                      width: '100%', padding: '10px 0',
+                      background: 'rgba(245,158,11,0.06)',
+                      border: '1px solid rgba(245,158,11,0.18)',
+                      borderRadius: 12,
+                      cursor: pickerLoadingMore ? 'default' : 'pointer',
+                      color: '#f59e0b',
+                      fontFamily: 'var(--font-ibm-mono)',
+                      fontSize: 11, letterSpacing: '0.12em',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => { if (!pickerLoadingMore) e.currentTarget.style.background = 'rgba(245,158,11,0.1)' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.06)' }}
+                  >
+                    {pickerLoadingMore ? (
+                      <>
+                        <div style={{
+                          width: 12, height: 12, borderRadius: '50%',
+                          border: '2px solid rgba(245,158,11,0.3)',
+                          borderTopColor: '#f59e0b',
+                          animation: 'spin 0.7s linear infinite',
+                          flexShrink: 0,
+                        }} />
+                        LOADING...
+                      </>
+                    ) : 'LOAD MORE'}
+                  </button>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={() => { setArtistCandidates(null) }}
+              style={{
+                marginTop: 16, width: '100%', padding: '8px 0',
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                fontSize: 13, color: '#4a4a5a',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-md flex flex-col gap-7 relative" style={{ zIndex: 1 }}>
 
         {/* Header */}
@@ -310,113 +554,71 @@ export default function Home() {
           <div style={{ height: 1, background: 'linear-gradient(90deg, #f59e0b22, #22d3ee22, transparent)' }} />
         </div>
 
-        {/* Previous track strip */}
-        {currentTrack && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '8px 12px',
-              borderRadius: 8,
-              background: '#0e0e15',
-              border: '1px solid #1e1e28',
-              animation: 'slide-up 0.3s ease forwards',
-            }}
-          >
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#3f3f46', flexShrink: 0 }} />
-            <span
-              style={{
-                fontFamily: 'var(--font-ibm-mono)',
-                fontSize: 9,
-                letterSpacing: '0.2em',
-                color: '#52525b',
-                flexShrink: 0,
-              }}
-            >
-              PREV
-            </span>
-            <span
-              style={{
-                fontFamily: 'var(--font-ibm-mono)',
-                fontSize: 11,
-                color: '#a1a1aa',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                flex: 1,
-                minWidth: 0,
-              }}
-            >
-              {currentTrack.name}
-            </span>
-            <div className="flex items-center" style={{ gap: 8, flexShrink: 0 }}>
-              {currentTrack.camelotKey && (
-                <span
-                  style={{
-                    fontFamily: 'var(--font-ibm-mono)',
-                    fontSize: 11,
-                    color: CAMELOT_COLORS[currentTrack.camelotKey]?.text ?? '#22d3ee',
-                    letterSpacing: '0.1em',
-                  }}
-                >
-                  {currentTrack.camelotKey}
-                </span>
-              )}
-              {currentTrack.bpm > 0 && (
-                <span
-                  style={{
-                    fontFamily: 'var(--font-ibm-mono)',
-                    fontSize: 11,
-                    color: '#52525b',
-                  }}
-                >
-                  {currentTrack.bpm}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={() => handleFeedback('on-track')}
-                title="More like this"
-                style={{
-                  padding: '3px 5px',
-                  borderRadius: 5,
-                  border: 'none',
-                  background: pendingFeedback === 'on-track' ? 'rgba(74,222,128,0.12)' : 'transparent',
-                  color: pendingFeedback === 'on-track' ? '#4ade80' : '#3f3f46',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-              >
-                <ThumbsUpIcon size={13} />
-              </button>
-              <button
-                type="button"
-                onClick={() => handleFeedback('off-track')}
-                title="Different direction"
-                style={{
-                  padding: '3px 5px',
-                  borderRadius: 5,
-                  border: 'none',
-                  background: pendingFeedback === 'off-track' ? 'rgba(248,113,113,0.12)' : 'transparent',
-                  color: pendingFeedback === 'off-track' ? '#f87171' : '#3f3f46',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-              >
-                <ThumbsDownIcon size={13} />
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Card area */}
         <div className="w-full" style={{ position: 'relative' }}>
-          {loading ? (
+          {isEditingVibe ? (
+            /* Form card — when manually editing vibe */
+            <div
+              className="rounded-2xl overflow-hidden"
+              style={{ background: '#0e0e15', border: '1px solid #1e1e28', animation: 'card-enter 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards', display: 'flex', flexDirection: 'column', minHeight: 424 }}
+            >
+              <div style={{ height: 2, background: 'linear-gradient(90deg, transparent 0%, #f59e0b 40%, #22d3ee 60%, transparent 100%)' }} />
+              <form
+                onSubmit={handleSubmit}
+                style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}
+              >
+                <textarea
+                  value={vibe}
+                  onChange={(e) => setVibe(e.target.value)}
+                  placeholder="dark melodic techno, 132 BPM, building tension…"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      handleSubmit(e as unknown as React.FormEvent)
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    flex: 1,
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: '1px solid #1e1e28',
+                    padding: '0 0 18px',
+                    fontSize: 15,
+                    color: '#e4e4f0',
+                    fontFamily: 'var(--font-syne)',
+                    resize: 'none',
+                    outline: 'none',
+                    lineHeight: 1.65,
+                    transition: 'border-color 0.15s',
+                  }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#78350f' }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#1e1e28' }}
+                />
+                <ModeSelector value={mode} onChange={setMode} />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <EngineToggle value={engine} onChange={setEngine} />
+                  <button
+                    type="submit"
+                    disabled={!vibe.trim()}
+                    style={{
+                      padding: '9px 22px', borderRadius: 8,
+                      background: !vibe.trim() ? '#1a1a1a' : '#f59e0b',
+                      color: !vibe.trim() ? '#3f3f46' : '#08080d',
+                      fontFamily: 'var(--font-ibm-mono)', fontSize: 12, fontWeight: 600,
+                      letterSpacing: '0.12em', border: 'none',
+                      cursor: !vibe.trim() ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.15s', flexShrink: 0,
+                    }}
+                    onMouseEnter={(e) => { if (vibe.trim()) e.currentTarget.style.background = '#fbbf24' }}
+                    onMouseLeave={(e) => { if (vibe.trim()) e.currentTarget.style.background = '#f59e0b' }}
+                  >
+                    SUGGEST
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : loading ? (
             <div style={{ position: 'relative', borderRadius: 17, padding: '1px', overflow: 'hidden' }}>
               <div className="card-gradient-spin" />
               <div style={{ position: 'relative', zIndex: 1, borderRadius: 16, overflow: 'hidden' }}>
@@ -449,12 +651,11 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            /* Form card — before first session and after switching vibes */
+            /* Form card — before first session */
             <div
               className="rounded-2xl overflow-hidden"
               style={{ background: '#0e0e15', border: '1px solid #1e1e28', animation: 'card-enter 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards', display: 'flex', flexDirection: 'column', minHeight: 424 }}
             >
-              {/* Top accent line */}
               <div style={{ height: 2, background: 'linear-gradient(90deg, transparent 0%, #f59e0b 40%, #22d3ee 60%, transparent 100%)' }} />
               <form
                 onSubmit={handleSubmit}
@@ -512,74 +713,67 @@ export default function Home() {
               </form>
             </div>
           )}
-
-          {/* Switch-vibes confirm overlay — covers whichever state is active */}
-          {confirmingSwitch && (
-            <div
-              style={{
-                position: 'absolute', inset: 0, zIndex: 30, borderRadius: 17,
-                background: 'rgba(8,8,13,0.93)',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                gap: 28,
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7 }}>
-                <span style={{ fontFamily: 'var(--font-ibm-mono)', fontSize: 17, fontWeight: 700, letterSpacing: '0.14em', color: '#e4e4f0' }}>
-                  NEW VIBE
-                </span>
-                <span style={{ fontFamily: 'var(--font-ibm-mono)', fontSize: 10, letterSpacing: '0.18em', color: '#52525b' }}>
-                  CURRENT SET WILL BE CLEARED
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button
-                  type="button"
-                  onClick={() => setConfirmingSwitch(false)}
-                  style={{
-                    fontFamily: 'var(--font-ibm-mono)', fontSize: 11, fontWeight: 600,
-                    letterSpacing: '0.12em', padding: '9px 22px', borderRadius: 8,
-                    background: 'transparent', border: '1px solid #2e2e3e',
-                    color: '#52525b', cursor: 'pointer', transition: 'all 0.15s',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#52525b'; e.currentTarget.style.color = '#a1a1aa' }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#2e2e3e'; e.currentTarget.style.color = '#52525b' }}
-                >
-                  CANCEL
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSwitchVibes}
-                  style={{
-                    fontFamily: 'var(--font-ibm-mono)', fontSize: 11, fontWeight: 600,
-                    letterSpacing: '0.12em', padding: '9px 22px', borderRadius: 8,
-                    background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)',
-                    color: '#f87171', cursor: 'pointer', transition: 'all 0.15s',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.2)'; e.currentTarget.style.borderColor = 'rgba(248,113,113,0.55)' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.1)'; e.currentTarget.style.borderColor = 'rgba(248,113,113,0.3)' }}
-                >
-                  CONFIRM
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Switch vibes */}
+
+        {/* Toggle between Vibe Edit and Active Set */}
         {sessionActive && (
           <div className="flex justify-center">
             <button
               type="button"
-              onClick={() => setConfirmingSwitch(true)}
+              onClick={() => setIsEditingVibe(!isEditingVibe)}
               style={{
                 fontFamily: 'var(--font-ibm-mono)', fontSize: 11, letterSpacing: '0.12em',
-                color: '#3f3f46', background: 'none', border: 'none', cursor: 'pointer',
-                padding: '6px 12px', transition: 'color 0.15s',
+                color: isEditingVibe ? '#a1a1aa' : '#3f3f46',
+                background: isEditingVibe ? 'rgba(255,255,255,0.03)' : 'none',
+                border: 'none', cursor: 'pointer',
+                padding: '8px 16px', borderRadius: 20,
+                transition: 'all 0.2s',
+                display: 'flex', alignItems: 'center', gap: 8,
+                position: 'relative',
+                ...(isEditingVibe && {
+                  boxShadow: '0 0 15px rgba(245,158,11,0.1)',
+                })
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = '#71717a' }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = '#3f3f46' }}
+              onMouseEnter={(e) => {
+                if (!isEditingVibe) e.currentTarget.style.color = '#71717a'
+                else e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+              }}
+              onMouseLeave={(e) => {
+                if (!isEditingVibe) e.currentTarget.style.color = '#3f3f46'
+                else e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
+              }}
             >
-              ↺ SWITCH VIBES
+              {isEditingVibe && (
+                <>
+                  <div style={{
+                    position: 'absolute', inset: 0, borderRadius: 20,
+                    padding: 1,
+                    background: 'linear-gradient(90deg, #6b9ff5, #3dcf88, #f59e0b, #f87171)',
+                    mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                    WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                    maskComposite: 'exclude',
+                    WebkitMaskComposite: 'xor',
+                    pointerEvents: 'none',
+                    opacity: 0.6,
+                  }} />
+                  <div style={{
+                    display: 'flex', alignItems: 'flex-end', gap: 2, height: 10, marginRight: 2
+                  }}>
+                    {(() => {
+                      const beatDuration = currentTrack?.bpm ? (60 / currentTrack.bpm) : 0.5;
+                      return (
+                        <>
+                          <div style={{ width: 2, height: '60%', background: '#6b9ff5', borderRadius: 1, animation: `eq ${beatDuration}s ease-in-out infinite alternate` }} />
+                          <div style={{ width: 2, height: '100%', background: '#3dcf88', borderRadius: 1, animation: `eq ${beatDuration * 0.8}s ease-in-out infinite alternate -0.2s` }} />
+                          <div style={{ width: 2, height: '40%', background: '#f59e0b', borderRadius: 1, animation: `eq ${beatDuration * 1.2}s ease-in-out infinite alternate -0.4s` }} />
+                        </>
+                      )
+                    })()}
+                  </div>
+                </>
+              )}
+              {isEditingVibe ? 'BACK TO SET' : '↺ SWITCH VIBES'}
             </button>
           </div>
         )}
@@ -683,15 +877,14 @@ export default function Home() {
 
                   {/* Rows */}
                   {filtered.map((entry, i) => {
+                    // Map back to original index for feedback mutation
+                    const originalIndex = historyLog.indexOf(entry)
                     const url = entry.track.spotifyId
                       ? `https://open.spotify.com/track/${entry.track.spotifyId}`
                       : `https://open.spotify.com/search/${encodeURIComponent(`${entry.track.name} ${entry.track.artist}`)}`
                     return (
-                      <a
+                      <div
                         key={`${entry.track.spotifyId}-${i}`}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
                         style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -700,7 +893,6 @@ export default function Home() {
                           borderRadius: 6,
                           background: 'transparent',
                           border: '1px solid transparent',
-                          textDecoration: 'none',
                           transition: 'background 0.15s, border-color 0.15s',
                         }}
                         onMouseEnter={e => {
@@ -713,9 +905,14 @@ export default function Home() {
                         }}
                       >
                         <span style={{ width: 5, height: 5, borderRadius: '50%', background: STATUS_COLOR[entry.status], flexShrink: 0 }} />
-                        <span style={{ fontFamily: 'var(--font-syne)', fontSize: 12, color: '#a1a1aa', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontFamily: 'var(--font-syne)', fontSize: 12, color: '#a1a1aa', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'none' }}
+                        >
                           {entry.track.name}
-                        </span>
+                        </a>
                         <span style={{ fontFamily: 'var(--font-ibm-mono)', fontSize: 9, color: '#3f3f46', letterSpacing: '0.12em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 80 }}>
                           {entry.track.artist}
                         </span>
@@ -729,7 +926,40 @@ export default function Home() {
                             {entry.track.bpm}
                           </span>
                         )}
-                      </a>
+                        {/* Inline feedback */}
+                        <div style={{ display: 'flex', gap: 2, flexShrink: 0, marginLeft: 2 }}>
+                          <button
+                            type="button"
+                            onClick={e => { e.stopPropagation(); handleHistoryFeedback(originalIndex, 'on-track') }}
+                            title="On track"
+                            style={{
+                              padding: '2px 4px', borderRadius: 4, border: 'none',
+                              background: entry.feedback === 'on-track' ? 'rgba(74,222,128,0.12)' : 'transparent',
+                              color: entry.feedback === 'on-track' ? '#4ade80' : '#27272a',
+                              cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center',
+                            }}
+                            onMouseEnter={e => { if (entry.feedback !== 'on-track') e.currentTarget.style.color = '#3f3f46' }}
+                            onMouseLeave={e => { if (entry.feedback !== 'on-track') e.currentTarget.style.color = '#27272a' }}
+                          >
+                            <ThumbsUpIcon size={10} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={e => { e.stopPropagation(); handleHistoryFeedback(originalIndex, 'off-track') }}
+                            title="Off track"
+                            style={{
+                              padding: '2px 4px', borderRadius: 4, border: 'none',
+                              background: entry.feedback === 'off-track' ? 'rgba(248,113,113,0.12)' : 'transparent',
+                              color: entry.feedback === 'off-track' ? '#f87171' : '#27272a',
+                              cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center',
+                            }}
+                            onMouseEnter={e => { if (entry.feedback !== 'off-track') e.currentTarget.style.color = '#3f3f46' }}
+                            onMouseLeave={e => { if (entry.feedback !== 'off-track') e.currentTarget.style.color = '#27272a' }}
+                          >
+                            <ThumbsDownIcon size={10} />
+                          </button>
+                        </div>
+                      </div>
                     )
                   })}
                 </div>
@@ -739,6 +969,8 @@ export default function Home() {
         })()}
 
       </div>
+
+
     </div>
   )
 }
