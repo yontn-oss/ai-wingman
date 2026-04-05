@@ -5,7 +5,7 @@
 <h1 align="center">ai-wingman</h1>
 
 <p align="center">
-  <strong>The right way to wire AI into your Next.js app.</strong>
+  <strong>Production-ready AI patterns for your Next.js app.</strong>
 </p>
 
 <p align="center">
@@ -33,6 +33,7 @@
 ## Table of contents
 
 - [The problem it solves](#the-problem-it-solves)
+- [Why it works](#why-it-works)
 - [How it works](#how-it-works)
 - [18 patterns across 4 categories](#18-patterns-across-4-categories)
 - [New to AI development?](#new-to-ai-development)
@@ -50,7 +51,17 @@ Calling an AI API is three lines of code. Shipping a production AI feature is no
 
 You need to handle streaming tokens to the UI, structure outputs as typed JSON, store conversation history, let the model call your own functions, guard against bad content, measure quality over time, and do it all without turning your codebase into a mess of `fetch` calls and `any` types.
 
-Every team figures this out from scratch. ai-wingman packages 18 of those patterns — each one the right way to wire that use-case — and scaffolds them with a single command.
+Every team figures this out from scratch. ai-wingman packages 18 of those patterns — each one a robust starting point for that use-case — and scaffolds them with a single command.
+
+---
+
+## Why it works
+
+Modern AI libraries move faster than any LLM training dataset. Wiring them up manually is not trivial—even for advanced models that frequently use incorrect API versions or broken configurations.
+
+**ai-wingman provides highly tested and well thought out AI boilerplate that just works out the box.**
+
+By eliminating the complex plumbing of setting up AI patterns, `ai-wingman` handles the wiring so accurately that AI features become the one thing you or your coding agent **never get wrong**.
 
 ---
 
@@ -140,8 +151,6 @@ your project
     ▼
 your project + production-ready AI feature
 ```
-
----
 
 ## 18 patterns across 4 categories
 
