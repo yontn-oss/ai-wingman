@@ -39,7 +39,7 @@ node /path/to/wingman/packages/ai-wingman/dist/wingman.js add chat --yes
 pnpm --filter ai-wingman test
 ```
 
-525 snapshot tests across all 18 generators. Generators are pure `(config) => string` functions — fast, deterministic, snapshot-tested.
+Snapshot tests across all generators. Generators are pure `(config) => string` functions — fast, deterministic, snapshot-tested.
 
 If your change intentionally alters generated output, update snapshots with:
 
@@ -111,6 +111,8 @@ The prompt and all generators pick it up automatically.
 
 ## Adding a pattern
 
+### CLI package
+
 1. Create `src/patterns/<name>/index.ts` exporting a `Pattern` object
    - The export must be named `<camelCaseName>Pattern` (e.g., `myPattern` for `src/patterns/my/`)
    - Include a `cliFlags` array listing any non-universal flags the pattern accepts
@@ -118,5 +120,8 @@ The prompt and all generators pick it up automatically.
 3. Add generators to `src/generators/` and templates to `src/templates/` as needed
 4. Run `npm run generate:registry` — it picks up the new pattern automatically
 5. Add snapshot tests in `tests/unit/generators/<name>.test.ts`
+6. Add any pattern-specific CLI flags to `bin/wingman.ts`
+7. Add the pattern to `src/types.ts`: config interface + any new `AddChatOptions` fields
+8. Update `README.md`: patterns table, flags table, test count, pattern count
 
 You do **not** need to manually edit `src/registry/patterns.ts` — the codegen script handles it.

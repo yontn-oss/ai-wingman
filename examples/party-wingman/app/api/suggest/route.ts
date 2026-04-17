@@ -60,7 +60,7 @@ async function inferGenres(artistName: string): Promise<string[]> {
   const genreList = SPOTIFY_GENRES.map(g => g.name).join(', ')
 
   const result = await generateText({
-    model: openai('gpt-4o-mini'),
+    model: openai('gpt-5.4-nano'),
     prompt: `You are given the following complete list of valid Spotify genre tags:\n${genreList}\n\nFrom this list only, pick the 1-2 most specific genres that best match the artist "${artistName}". Prefer niche/specific genres over broad ones. Reply with only genre names from the list above, separated by commas, exactly as written, no explanation.`,
     maxOutputTokens: 60,
   }).catch(() => ({ text: '' }))
@@ -370,7 +370,7 @@ export async function POST(req: Request) {
         const excludedArtistCount = excluded.filter(id => excludedArtistIds.has(id)).length
         const totalExcluded = excluded.length
         const artistRatio = totalExcluded > 0 ? excludedArtistCount / totalExcluded : 0
-        
+
         // Show the artist only if we haven't hit the 1:5 limit yet
         const includeArtist = artistRatio < 0.2 && artistMatches.length > 0
         const artistToInclude = includeArtist ? artistMatches.slice(0, 1) : []
@@ -433,15 +433,15 @@ For suggest_track, set spotifyId = the exact SPOTIFY_ID value from the line abov
         // If artist-graph mode: enforce that the spotifyId came from the pool.
         // If the model hallucinated an ID, substitute the pool track's real data.
         let finalTrack = track
-        
+
         // 1. Mandatory Gate: Filter out excluded tracks or banned artists
         if (excluded.includes(track.spotifyId ?? '') || (body.bannedArtists ?? []).includes(track.artist)) {
           dbg('gate:dedupe-violation', { id: track.spotifyId, artist: track.artist })
-          
+
           if (ctx) {
             // Remediation for Artist-Graph: pick the first available candidate that is not banned
-            const available = ctx.candidatePool.filter(t => 
-              !excluded.includes(t.id) && 
+            const available = ctx.candidatePool.filter(t =>
+              !excluded.includes(t.id) &&
               !(body.bannedArtists ?? []).includes(t.artist)
             )
             const substitute = available[0]
@@ -467,8 +467,8 @@ For suggest_track, set spotifyId = the exact SPOTIFY_ID value from the line abov
           const poolTrack = ctx.candidatePool.find(t => t.id === finalTrack.spotifyId)
           if (!poolTrack) {
             dbg('artist-graph:id-mismatch', { hallucinated: finalTrack.spotifyId, name: finalTrack.name })
-            const available = ctx.candidatePool.filter(t => 
-              !excluded.includes(t.id) && 
+            const available = ctx.candidatePool.filter(t =>
+              !excluded.includes(t.id) &&
               !(body.bannedArtists ?? []).includes(t.artist)
             )
             const substitute = available[0]

@@ -18,6 +18,7 @@ Use this skill when the user asks for any of the following:
 - Generative UI (tool calls rendered as React components)
 - Hybrid keyword + vector search
 - An LLM eval or regression test harness
+- An MCP app / MCP server with an embedded UI (renders in Claude.ai, ChatGPT, VS Code, Goose)
 
 ## Command syntax
 
@@ -49,6 +50,7 @@ Always include `--yes` to skip interactive prompts. Always include `--provider`.
 | `memory` | Save route, retrieve route, memory store, `buildMemoryContext()` inject helper |
 | `multi-agent` | Orchestrator route, specialist agents, typed handoff tools, shared types |
 | `background-agent` | Enqueue route (returns jobId), status/polling route, worker, job store |
+| `mcp-app` | MCP Streamable HTTP server route, self-contained HTML UI bundle, optional in-memory state store |
 
 ## Flags
 
@@ -58,7 +60,7 @@ Always include `--yes` to skip interactive prompts. Always include `--provider`.
 | `--yes` | all | Accept all defaults, skip prompts |
 | `--overwrite` | all | Overwrite existing files |
 | `--auth` | most | Add NextAuth v5 guard |
-| `--storage <id>` | `chat`, `agent` | `memory` |
+| `--storage <id>` | `chat`, `agent` | `memory` \| `postgres` |
 | `--no-page` | `chat`, `agent`, `audio`, `multimodal`, `image-gen`, `interrupt` | Skip the UI page |
 | `--schema-name <name>` | `structured-output`, `stream-object`, `document-processing` | Name for schema, hook, and type |
 | `--no-hook` | `structured-output`, `stream-object`, `document-processing` | Skip the client hook |
@@ -67,6 +69,10 @@ Always include `--yes` to skip interactive prompts. Always include `--provider`.
 | `--interrupt` | `chat` | Embed a human-in-the-loop approval gate |
 | `--dataset` | `eval` | Generate JSONL dataset + runner instead of inline eval script |
 | `--ci` | `eval` | Generate GitHub Actions CI workflow |
+| `--app-name <name>` | `mcp-app` | Kebab-case app name (default: `my-app`) |
+| `--no-state` | `mcp-app` | Skip the in-memory state module |
+| `--state-path <path>` | `mcp-app` | Output path for state module |
+| `--ui-bundle <path>` | `mcp-app` | Output path for UI bundle HTML |
 
 ## Multi-pattern recipes
 

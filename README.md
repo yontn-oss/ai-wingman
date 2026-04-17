@@ -35,7 +35,7 @@
 - [The problem it solves](#the-problem-it-solves)
 - [Why it works](#why-it-works)
 - [How it works](#how-it-works)
-- [18 patterns across 4 categories](#18-patterns-across-4-categories)
+- [19 patterns across 5 categories](#19-patterns-across-5-categories)
 - [New to AI development?](#new-to-ai-development)
 - [Quick start](#quick-start)
 - [Prerequisites](#prerequisites)
@@ -51,17 +51,19 @@ Calling an AI API is three lines of code. Shipping a production AI feature is no
 
 You need to handle streaming tokens to the UI, structure outputs as typed JSON, store conversation history, let the model call your own functions, guard against bad content, measure quality over time, and do it all without turning your codebase into a mess of `fetch` calls and `any` types.
 
-Every team figures this out from scratch. ai-wingman packages 18 of those patterns — each one a robust starting point for that use-case — and scaffolds them with a single command.
+Every team figures this out from scratch. ai-wingman packages 19 of those patterns — each one a robust starting point for that use-case — and scaffolds them with a single command.
 
 ---
 
 ## Why it works
 
-Modern AI libraries move faster than any LLM training dataset. Wiring them up manually is not trivial—even for advanced models that frequently use incorrect API versions or broken configurations.
+**It exits.** ai-wingman has no runtime presence in your app. Once it writes your files, it's gone — nothing to update, nothing to break, no version to pin.
 
-**ai-wingman provides highly tested and well thought out AI boilerplate that just works out the box.**
+**Generators are pure functions.** Every pattern is `(config) => string` with no filesystem reads, no network calls, and no side effects. That makes them fast to test and easy to snapshot. 529 snapshot tests cover all 19 generators — changing any output requires updating the snapshot deliberately, not by accident.
 
-By eliminating the complex plumbing of setting up AI patterns, `ai-wingman` handles the wiring so accurately that AI features become the one thing you or your coding agent **never get wrong**.
+**Nothing is written speculatively.** The CLI builds a complete execution plan, shows you exactly which packages will be installed and which files will be created, and waits for confirmation before touching anything.
+
+**You own the output.** The generated code is plain TypeScript — no wrapper types, no proprietary hooks, nothing that requires ai-wingman to understand or modify later. Your coding agent can read it, extend it, and debug it the same as any other file in your project.
 
 ---
 
@@ -152,7 +154,7 @@ your project
 your project + production-ready AI feature
 ```
 
-## 18 patterns across 4 categories
+## 19 patterns across 5 categories
 
 ### Generate
 
@@ -199,6 +201,14 @@ Patterns that judge, classify, or score AI inputs and outputs.
 |---------|---------------|-----------------|
 | `ai-wingman add eval` | LLM-as-judge evaluation harness | A test suite for AI outputs. You write test cases; a judge model scores each answer. Catch regressions when you change prompts or swap models — the same way unit tests catch bugs in regular code. |
 | `ai-wingman add content-moderation` | LLM-based content classifier | Classifies any input or output against a policy you define. Returns `{ allowed, category, reason }` — drop it in front of any route. |
+
+### Interoperability
+
+Patterns for serving interactive UIs natively inside AI hosts like Claude.ai, ChatGPT, etc.
+
+| Command | What it builds | What that means |
+|---------|---------------|-----------------|
+| `ai-wingman add mcp-app` | MCP App server with interactive UI | Your tool returns a live interactive UI that Claude.ai, ChatGPT, VS Code Copilot, and Goose render natively — as a sandboxed iframe inside the chat. You write the server and the HTML; the host renders it. |
 
 ---
 
@@ -270,6 +280,10 @@ npx ai-wingman add chat --provider anthropic --overwrite --yes  # re-scaffold
 | `--no-hook` | `structured-output`, `stream-object` | Skip the generated React hook |
 | `--tool-name <name>` | `tools` | Name for the generated tool stub |
 | `--image-model <model>` | `image-gen` | `dall-e-3` (default) or `dall-e-2` |
+| `--app-name <name>` | `mcp-app` | Kebab-case app name (default: `my-app`) |
+| `--no-state` | `mcp-app` | Skip generating the in-memory state module |
+| `--state-path <path>` | `mcp-app` | Custom output path for the state module |
+| `--ui-bundle <path>` | `mcp-app` | Custom output path for the HTML UI bundle |
 | `--api-route <path>` | all | Custom output path for the API route |
 | `--overwrite` | all | Overwrite existing files without prompting |
 | `-y, --yes` | all | Accept all defaults |
@@ -291,7 +305,7 @@ The CLI never silently overwrites a file — it prompts for each conflict unless
 
 - **Generators are pure functions** — `(config) => string`. No side effects, no network calls, no filesystem reads. Fast to test, easy to snapshot.
 - **The planner runs before any files are written** — every `ai-wingman add` builds a complete `ExecutionPlan` first, shows it to you for confirmation, then executes. Nothing is written speculatively.
-- **525 snapshot tests** across all 18 generators. Changing a generator output requires updating the snapshot deliberately — not by accident.
+- **529 snapshot tests** across all 19 generators. Changing a generator output requires updating the snapshot deliberately — not by accident.
 - **Providers and patterns are registry entries** — adding a new provider is one object in `providers.ts`. All generators pick it up automatically.
 
 For project structure, local dev setup, and contribution guidelines see [CONTRIBUTING.md](./CONTRIBUTING.md).

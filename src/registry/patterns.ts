@@ -12,6 +12,7 @@ import { generativeUiPattern } from '../patterns/generative-ui/index.js'
 import { hybridSearchPattern } from '../patterns/hybrid-search/index.js'
 import { imageGenPattern } from '../patterns/image-gen/index.js'
 import { interruptPattern } from '../patterns/interrupt/index.js'
+import { mcpAppPattern } from '../patterns/mcp-app/index.js'
 import { memoryPattern } from '../patterns/memory/index.js'
 import { multiAgentPattern } from '../patterns/multi-agent/index.js'
 import { multimodalPattern } from '../patterns/multimodal/index.js'
@@ -33,6 +34,7 @@ const patternRegistry: Pattern[] = [
   hybridSearchPattern,
   imageGenPattern,
   interruptPattern,
+  mcpAppPattern,
   memoryPattern,
   multiAgentPattern,
   multimodalPattern,

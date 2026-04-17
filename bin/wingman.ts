@@ -35,6 +35,11 @@ program
   // generative-ui flags
   .option('--route-path <path>', 'Output path for API route (generative-ui)')
   // document-processing flags (reuses --schema-name, --schema-path, --hook-path, --no-hook from structured-output)
+  // mcp-app flags
+  .option('--app-name <name>', 'Kebab-case app name (default: my-app)')
+  .option('--no-state', 'Exclude in-memory state module')
+  .option('--state-path <path>', 'Output path for state module')
+  .option('--ui-bundle <path>', 'Output path for UI bundle HTML')
   .action(addCommand)
 
 program

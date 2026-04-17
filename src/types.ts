@@ -142,6 +142,15 @@ export interface AddChatOptions {
   // generative-ui flags
   /** override API route output path (generative-ui) */
   routePath?: string
+  // mcp-app flags
+  /** kebab-case app name (default: my-app) */
+  appName?: string
+  /** false = --no-state (skip state store) */
+  state?: boolean
+  /** override state module output path */
+  statePath?: string
+  /** override UI bundle output path */
+  uiBundle?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -524,6 +533,26 @@ export interface MultiAgentConfig {
   pathAlias: string
   hasSrcDir: boolean
   packageManager: PackageManager
+  targetDir: string
+}
+
+// ---------------------------------------------------------------------------
+// mcp-app pattern
+// ---------------------------------------------------------------------------
+
+export interface McpAppConfig {
+  appName: string        // kebab-case, e.g. "my-app"
+  appNameSnake: string   // snake_case for tool names, e.g. "my_app"
+  appNamePascal: string  // PascalCase for McpServer name, e.g. "MyApp"
+  auth: boolean
+  includeState: boolean
+  paths: {
+    apiRoute: string     // e.g. "app/api/mcp/route.ts"
+    uiBundle: string     // e.g. "public/mcp-apps/my-app/index.html"
+    state?: string       // e.g. "lib/mcp-my-app-state.ts" — present iff includeState
+  }
+  pathOverwrites: { apiRoute?: boolean; uiBundle?: boolean; state?: boolean }
+  pathAlias: string
   targetDir: string
 }
 
